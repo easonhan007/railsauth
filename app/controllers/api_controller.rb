@@ -1,7 +1,8 @@
 class ApiController < ApplicationController  
   http_basic_authenticate_with name:ENV["API_AUTH_NAME"], password:ENV["API_AUTH_PASSWORD"], :only => [:signup, :signin, :get_token]  
   before_filter :check_for_valid_authtoken, :except => [:signup, :signin, :get_token]
-  
+  IMAGE_FOLD = 'public/imgs'
+
   def signup
     if request.post?
       if params && params[:full_name] && params[:email] && params[:password]
@@ -32,6 +33,7 @@ class ApiController < ApplicationController
           }
                     
           e = Error.new(:status => 400, :message => error_str)
+          logger.info e.to_json 
           render :json => e.to_json, :status => 400
         end
       else
@@ -157,37 +159,26 @@ class ApiController < ApplicationController
           rand_id = rand_string(40)
           image_name = params[:image].original_filename
           image = params[:image].read     
-                    
-          s3 = AWS::S3.new
-            
-          if s3
-            bucket = s3.buckets[ENV["S3_BUCKET_NAME"]]
-              
-            if !bucket
-              bucket = s3.buckets.create(ENV["S3_BUCKET_NAME"])
-            end
-              
-            s3_obj = bucket.objects[rand_id]
-            s3_obj.write(image, :acl => :public_read)
-            image_url = s3_obj.public_url.to_s
-                                                    
-            photo = Photo.new(:name => image_name, :user_id => @user.id, :title => params[:title], :image_url => image_url, :random_id => rand_id)
-          
-            if photo.save
-              render :json => photo.to_json
-            else
-              error_str = ""
 
-              photo.errors.each{|attr, msg|           
-                error_str += "#{attr} - #{msg},"
-              }
+          File.open(File.join(IMAGE_FOLD, rand_id), 'wb') do |f|
+            f.write(image)
+          end
                     
-              e = Error.new(:status => 400, :message => error_str)
-              render :json => e.to_json, :status => 400
-            end
+          image_url = "#{request.protocol + request.host_with_port}/imgs/#{rand_id}"
+                                                  
+          photo = Photo.new(:name => image_name, :user_id => @user.id, :title => params[:title], :image_url => image_url, :random_id => rand_id)
+        
+          if photo.save
+            render :json => photo.to_json
           else
-            e = Error.new(:status => 401, :message => "AWS S3 signature is wrong")
-            render :json => e.to_json, :status => 401              
+            error_str = ""
+
+            photo.errors.each{|attr, msg|           
+              error_str += "#{attr} - #{msg},"
+            }
+                  
+            e = Error.new(:status => 400, :message => error_str)
+            render :json => e.to_json, :status => 400
           end
         else
           e = Error.new(:status => 401, :message => "Authtoken has expired")
@@ -207,19 +198,12 @@ class ApiController < ApplicationController
           photo = Photo.where(:random_id => params[:photo_id]).first
           
           if photo && photo.user_id == @user.id            
-            s3 = AWS::S3.new
-            
-            if s3
-              bucket = s3.buckets[ENV["S3_BUCKET_NAME"]]
-              s3_obj =  bucket.objects[photo.random_id]
-              s3_obj.delete
-                            
-              photo.destroy
-            
+            File.delete(File.join(IMAGE_FOLD, photo.rand_id)) rescue nil                            
+            if photo.destroy
               m = Message.new(:status => 200, :message => "Image deleted")          
               render :json => m.to_json, :status => 200  
             else
-              e = Error.new(:status => 401, :message => "AWS S3 signature is wrong")
+              e = Error.new(:status => 401, :message => "Can not delete picture")
               render :json => e.to_json, :status => 401        
             end                        
           else

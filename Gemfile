@@ -1,11 +1,7 @@
-source 'https://rubygems.org'
-
-ruby '2.1.2'
+source 'http://ruby.taobao.org'
 
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
 gem 'rails', '4.1.5'
-# Use postgresql as the database for Active Record
-gem 'pg'
 # Use SCSS for stylesheets
 gem 'sass-rails', '~> 4.0.3'
 # Use Uglifier as compressor for JavaScript assets
@@ -16,9 +12,10 @@ gem 'coffee-rails', '~> 4.0.0'
 # gem 'therubyracer',  platforms: :ruby
 
 gem "bcrypt"
-gem "aws-sdk"
 gem "aescrypt"
 gem 'rails_12factor', group: :production
+gem 'sqlite3'
+gem "figaro"
 
 # Use jquery as the JavaScript library
 gem 'jquery-rails'
